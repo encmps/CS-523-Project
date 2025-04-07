@@ -1,0 +1,370 @@
+### Your Role
+
+You are an experienced IT operation personnel. 
+
+### Background
+
+We are working on a project called AIOpsLab. Below is its introcution:
+
+AIOpsLab is an open-source framework developed by Microsoft to facilitate the design, development, and evaluation of autonomous AI agents for IT operations (AIOps). It provides a standardized environment for testing AI agents across various operational tasks, including fault detection, localization, analysis, and mitigation, thereby promoting the development of self-healing cloud systems. The framework offers a modular design, allowing developers to onboard their agents, add new applications, and define custom problems. It supports interaction with realistic service operation tasks in a reproducible manner and is flexible enough to extend to new applications, workloads, and faults. AIOpsLab's architecture comprises several key components:
+
+- **Orchestrator**: Manages interactions between agents and the environment, deploying workloads, injecting faults, and evaluating agent performance.
+- **Services**: Supports various cloud service environments, including microservices and serverless architectures.
+- **Workload Generator**: Simulates normal and failure scenarios to test agent performance under different conditions.
+- **Fault Generator**: Implements fine-grained fault injection in multiple cloud scenarios, simulating complex failures.
+- **Observability**: Enhances monitoring capabilities by integrating various tools, ensuring effective system management.
+
+These components collectively enable AIOpsLab to serve as a comprehensive platform for evaluating and improving AI agents in cloud operations. 
+
+### Task
+
+We are going to extend one more fault injector. Here are three existing fault injectors as examples:
+
+#### Application Fault Injector
+
+```
+import time
+from aiopslab.generators.fault.base import FaultInjector
+from aiopslab.service.kubectl import KubeCtl
+
+
+class ApplicationFaultInjector(FaultInjector):
+    def __init__(self, namespace: str):
+        self.namespace = namespace
+        self.kubectl = KubeCtl()
+        self.mongo_service_pod_map = {"mongodb-rate": "rate", "mongodb-geo": "geo"}
+
+    def delete_service_pods(self, target_service_pods: list[str]):
+        """Kill the corresponding service pod to enforce the fault."""
+        for pod in target_service_pods:
+            delete_pod_command = f"kubectl delete pod {pod} -n {self.namespace}"
+            delete_result = self.kubectl.exec_command(delete_pod_command)
+            print(f"Deleted service pod {pod} to enforce the fault: {delete_result}")
+
+    ############# FAULT LIBRARY ################
+    # A.1 - revoke_auth: Revoke admin privileges in MongoDB - Auth
+    def inject_revoke_auth(self, microservices: list[str]):
+        """Inject a fault to revoke admin privileges in MongoDB."""
+        print(f"Microservices to inject: {microservices}")
+        target_services = ["mongodb-rate", "mongodb-geo"]
+        for service in target_services:
+            if service in microservices:
+                pods = self.kubectl.list_pods(self.namespace)
+                # print(pods)
+                target_mongo_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if service in pod.metadata.name
+                ]
+                print(f"Target MongoDB Pods: {target_mongo_pods}")
+
+                # Find the corresponding service pod
+                target_service_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if self.mongo_service_pod_map[service] in pod.metadata.name
+                    and "mongodb-" not in pod.metadata.name
+                ]
+                print(f"Target Service Pods: {target_service_pods}")
+
+                for pod in target_mongo_pods:
+                    if service == "mongodb-rate":
+                        revoke_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/revoke-admin-rate-mongo.sh"
+                    elif service == "mongodb-geo":
+                        revoke_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/revoke-admin-geo-mongo.sh"
+                    result = self.kubectl.exec_command(revoke_command)
+                    print(f"Injection result for {service}: {result}")
+
+                self.delete_service_pods(target_service_pods)
+                time.sleep(3)
+
+    def recover_revoke_auth(self, microservices: list[str]):
+        target_services = ["mongodb-rate", "mongodb-geo"]
+        for service in target_services:
+            print(f"Microservices to recover: {microservices}")
+            if service in microservices:
+                pods = self.kubectl.list_pods(self.namespace)
+                target_mongo_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if service in pod.metadata.name
+                ]
+                print(f"Target MongoDB Pods for recovery: {target_mongo_pods}")
+
+                # Find the corresponding service pod
+                target_service_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if self.mongo_service_pod_map[service] in pod.metadata.name
+                ]
+                for pod in target_mongo_pods:
+                    if service == "mongodb-rate":
+                        recover_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/revoke-mitigate-admin-rate-mongo.sh"
+                    elif service == "mongodb-geo":
+                        recover_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/revoke-mitigate-admin-geo-mongo.sh"
+                    result = self.kubectl.exec_command(recover_command)
+                    print(f"Recovery result for {service}: {result}")
+
+                self.delete_service_pods(target_service_pods)
+
+    # A.2 - storage_user_unregistered: User not registered in MongoDB - Storage/Net
+    def inject_storage_user_unregistered(self, microservices: list[str]):
+        """Inject a fault to create an unregistered user in MongoDB."""
+        target_services = ["mongodb-rate", "mongodb-geo"]
+        for service in target_services:
+            if service in microservices:
+                pods = self.kubectl.list_pods(self.namespace)
+                target_mongo_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if service in pod.metadata.name
+                ]
+                print(f"Target MongoDB Pods: {target_mongo_pods}")
+
+                target_service_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if pod.metadata.name.startswith(self.mongo_service_pod_map[service])
+                ]
+                for pod in target_mongo_pods:
+                    revoke_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/remove-admin-mongo.sh"
+                    result = self.kubectl.exec_command(revoke_command)
+                    print(f"Injection result for {service}: {result}")
+
+                self.delete_service_pods(target_service_pods)
+
+    def recover_storage_user_unregistered(self, microservices: list[str]):
+        target_services = ["mongodb-rate", "mongodb-geo"]
+        for service in target_services:
+            if service in microservices:
+                pods = self.kubectl.list_pods(self.namespace)
+                target_mongo_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if service in pod.metadata.name
+                ]
+                print(f"Target MongoDB Pods: {target_mongo_pods}")
+
+                target_service_pods = [
+                    pod.metadata.name
+                    for pod in pods.items
+                    if pod.metadata.name.startswith(self.mongo_service_pod_map[service])
+                ]
+                for pod in target_mongo_pods:
+                    if service == "mongodb-rate":
+                        revoke_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/remove-mitigate-admin-rate-mongo.sh"
+                    elif service == "mongodb-geo":
+                        revoke_command = f"kubectl exec -it {pod} -n {self.namespace} -- /bin/bash /scripts/remove-mitigate-admin-geo-mongo.sh"
+                    result = self.kubectl.exec_command(revoke_command)
+                    print(f"Recovery result for {service}: {result}")
+
+                self.delete_service_pods(target_service_pods)
+
+    # A.3 - misconfig_app: pull the buggy config of the application image - Misconfig
+    def inject_misconfig_app(self, microservices: list[str]):
+        """Inject a fault by pulling a buggy config of the application image.
+
+        NOTE: currently only the geo microservice has a buggy image.
+        """
+        for service in microservices:
+            # Get the deployment associated with the service
+            deployment = self.kubectl.get_deployment(service, self.namespace)
+            if deployment:
+                # Modify the image to use the buggy image
+                for container in deployment.spec.template.spec.containers:
+                    if container.name == f"hotel-reserv-{service}":
+                        container.image = "yinfangchen/geo:app3"
+                self.kubectl.update_deployment(service, self.namespace, deployment)
+                time.sleep(10)
+
+    def recover_misconfig_app(self, microservices: list[str]):
+        for service in microservices:
+            deployment = self.kubectl.get_deployment(service, self.namespace)
+            if deployment:
+                for container in deployment.spec.template.spec.containers:
+                    if container.name == f"hotel-reserv-{service}":
+                        container.image = f"yinfangchen/hotelreservation:latest"
+                self.kubectl.update_deployment(service, self.namespace, deployment)
+
+
+if __name__ == "__main__":
+    namespace = "test-hotel-reservation"
+    # microservices = ["geo"]
+    microservices = ["mongodb-geo"]
+    # fault_type = "misconfig_app"
+    fault_type = "storage_user_unregistered"
+    print("Start injection/recover ...")
+    injector = ApplicationFaultInjector(namespace)
+    # injector._inject(fault_type, microservices)
+    injector._recover(fault_type, microservices)
+```
+
+#### OS Fault Injector
+
+```
+import json
+import yaml
+import subprocess
+
+from aiopslab.service.kubectl import KubeCtl
+from aiopslab.generators.fault.base import FaultInjector
+from aiopslab.paths import BASE_DIR
+from aiopslab.generators.fault.helpers import (
+    get_pids_by_name,
+    sn_svc_process_names,
+    hr_svc_process_names,
+    hr_mongod_process_names,
+)
+
+
+class OSFaultInjector(FaultInjector):
+    def __init__(self):
+        pass
+
+    # O.1: Kernel issue via the BPF filter
+    def kernel_bug(self):
+        return NotImplementedError
+
+    # O.2: Simulate a disk woreout failure
+    def inject_disk_woreout(self):
+        pids = []
+        proc_names = hr_mongod_process_names  # if it is SocialNetwork
+        for term in proc_names:
+            term_pids = get_pids_by_name(term)
+            print(f"Found PIDs for term '{term}': {term_pids}")
+            pids.extend(term_pids)
+
+        print(f"Injecting kernel fault into processes: {pids}")
+
+        target_syscall = "write"  # syscall for disk I/O
+        error_code = -5  # EIO (Input/output error)
+
+        if not pids:
+            print("No processes found to inject faults.")
+            return
+        try:
+            # Run err_inject with the target syscall, error code, and PIDs
+            # ./err_inject <target_syscall> <error_code> <pid1> [<pid2> ... <pidN>]
+            command = [
+                "sudo",
+                str(BASE_DIR / "generators/fault/bpf_injector/err_inject"),
+                target_syscall,
+                str(error_code),
+            ] + [str(pid) for pid in pids]
+            # print(f"Running command: {' '.join(command)}")
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to inject fault: {e}")
+
+        # for pid in pids:
+        #     try:
+        #         print(f"Stopping process {pid}")
+        #         subprocess.run(["sudo", "kill", "-9", str(pid)], check=True)
+        #     except subprocess.CalledProcessError as e:
+        #         print(f"Failed to stop process {pid}: {e}")
+
+    def recover_disk_woreout(self):
+        bpf_folder_path = "/sys/fs/bpf/err_inject"
+        try:
+            command = ["sudo", "rm", "-rf", bpf_folder_path]
+            print(f"Removing folder: {bpf_folder_path}")
+            subprocess.run(command, check=True)
+            print(f"Successfully removed {bpf_folder_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to remove folder {bpf_folder_path}: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+
+
+def main():
+    injector = OSFaultInjector()
+    injector.inject_disk_woreout()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+#### Otel Fault Injector
+
+```
+import json
+import subprocess
+from aiopslab.generators.fault.base import FaultInjector
+from aiopslab.service.kubectl import KubeCtl
+
+
+class OtelFaultInjector(FaultInjector):
+    def __init__(self, namespace: str):
+        self.namespace = namespace
+        self.kubectl = KubeCtl()
+        self.configmap_name = f"{namespace}-flagd-config"
+
+    def inject_fault(self, feature_flag: str):
+        command = (
+            f"kubectl get configmap {self.configmap_name} -n {self.namespace} -o json"
+        )
+        try:
+            output = self.kubectl.exec_command(command)
+            configmap = json.loads(output)
+        except subprocess.CalledProcessError:
+            raise ValueError(
+                f"ConfigMap '{self.configmap_name}' not found in namespace '{self.namespace}'."
+            )
+        except json.JSONDecodeError:
+            raise ValueError(
+                f"Error decoding JSON for ConfigMap '{self.configmap_name}'."
+            )
+
+        flagd_data = json.loads(configmap["data"]["demo.flagd.json"])
+
+        if feature_flag in flagd_data["flags"]:
+            flagd_data["flags"][feature_flag]["defaultVariant"] = "on"
+        else:
+            raise ValueError(
+                f"Feature flag '{feature_flag}' not found in ConfigMap '{self.configmap_name}'."
+            )
+
+        updated_data = {"demo.flagd.json": json.dumps(flagd_data, indent=2)}
+        self.kubectl.create_or_update_configmap(
+            self.configmap_name, self.namespace, updated_data
+        )
+        print(f"Fault injected: Feature flag '{feature_flag}' set to 'on'.")
+
+    def recover_fault(self, feature_flag: str):
+        command = (
+            f"kubectl get configmap {self.configmap_name} -n {self.namespace} -o json"
+        )
+        try:
+            output = self.kubectl.exec_command(command)
+            configmap = json.loads(output)
+        except subprocess.CalledProcessError:
+            raise ValueError(
+                f"ConfigMap '{self.configmap_name}' not found in namespace '{self.namespace}'."
+            )
+        except json.JSONDecodeError:
+            raise ValueError(
+                f"Error decoding JSON for ConfigMap '{self.configmap_name}'."
+            )
+
+        flagd_data = json.loads(configmap["data"]["demo.flagd.json"])
+
+        if feature_flag in flagd_data["flags"]:
+            flagd_data["flags"][feature_flag]["defaultVariant"] = "off"
+        else:
+            raise ValueError(
+                f"Feature flag '{feature_flag}' not found in ConfigMap '{self.configmap_name}'."
+            )
+
+        updated_data = {"demo.flagd.json": json.dumps(flagd_data, indent=2)}
+        self.kubectl.create_or_update_configmap(
+            self.configmap_name, self.namespace, updated_data
+        )
+        print(f"Fault recovered: Feature flag '{feature_flag}' set to 'off'.")
+```
+
+### Instructions
+
+Please think step by step. Think of a list of 20 different faults that might occur in IT operation practices.
+
+**Output Format: A JSON list, each entry as a tuple (fault_name, detailed_description), indent='2'**
