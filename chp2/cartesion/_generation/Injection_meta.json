@@ -1,0 +1,82 @@
+[
+    {
+      "fault_name": "high_cpu_utilization",
+      "detailed_description": "Simulates a scenario where a process or service consumes excessive CPU resources, leading to performance degradation."
+    },
+    {
+      "fault_name": "memory_leak",
+      "detailed_description": "Introduces a memory leak in an application or service, causing gradual memory consumption until the system becomes unresponsive."
+    },
+    {
+      "fault_name": "disk_full",
+      "detailed_description": "Fills up the disk space on a node, preventing applications from writing logs, storing data, or functioning properly."
+    },
+    {
+      "fault_name": "network_latency",
+      "detailed_description": "Adds artificial network latency to simulate slow network conditions and evaluate the resilience of applications."
+    },
+    {
+      "fault_name": "packet_loss",
+      "detailed_description": "Drops a percentage of network packets to mimic unreliable network conditions, affecting communication between services."
+    },
+    {
+      "fault_name": "database_connection_timeout",
+      "detailed_description": "Causes database queries to time out, simulating network failures or high load on the database server."
+    },
+    {
+      "fault_name": "service_crash",
+      "detailed_description": "Forces a service or application to crash unexpectedly, requiring recovery mechanisms to restart it."
+    },
+    {
+      "fault_name": "kubernetes_pod_eviction",
+      "detailed_description": "Triggers Kubernetes to evict a pod, simulating node pressure or misconfiguration."
+    },
+    {
+      "fault_name": "corrupt_configuration_file",
+      "detailed_description": "Alters or corrupts a critical configuration file, causing application failures or unexpected behavior."
+    },
+    {
+      "fault_name": "dns_resolution_failure",
+      "detailed_description": "Prevents services from resolving domain names, simulating DNS outages or misconfigurations."
+    },
+    {
+      "fault_name": "ssl_certificate_expired",
+      "detailed_description": "Replaces a valid SSL certificate with an expired one, causing authentication and connection issues."
+    },
+    {
+      "fault_name": "high_io_wait",
+      "detailed_description": "Introduces high disk I/O latency, impacting read/write operations and overall system performance."
+    },
+    {
+      "fault_name": "thread_starvation",
+      "detailed_description": "Locks up critical application threads, leading to unresponsiveness and degraded performance."
+    },
+    {
+      "fault_name": "queue_overflow",
+      "detailed_description": "Overloads a message queue or event bus, delaying message processing and causing backpressure."
+    },
+    {
+      "fault_name": "log_flooding",
+      "detailed_description": "Generates excessive log entries, overwhelming logging systems and making debugging difficult."
+    },
+    {
+      "fault_name": "privilege_escalation",
+      "detailed_description": "Alters user permissions to simulate a security vulnerability, potentially allowing unauthorized access."
+    },
+    {
+      "fault_name": "locked_database_table",
+      "detailed_description": "Simulates a scenario where a critical database table remains locked due to long-running transactions, blocking other queries."
+    },
+    {
+      "fault_name": "orphaned_resource_leak",
+      "detailed_description": "Leaves unused cloud resources running without cleanup, leading to increased costs and resource wastage."
+    },
+    {
+      "fault_name": "unpatched_vulnerability",
+      "detailed_description": "Introduces a known security vulnerability by rolling back a patched version of an application."
+    },
+    {
+      "fault_name": "time_drift",
+      "detailed_description": "Modifies the system clock to be out of sync, causing authentication failures and inconsistent timestamps in logs."
+    }
+  ]
